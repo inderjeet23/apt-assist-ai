@@ -36,7 +36,32 @@ const FAQ_RESPONSES = {
   'office hours': 'Office hours are Monday–Friday, 9am–5pm.',
 };
 
-const MAINTENANCE_ISSUE_TYPES = ['Leak', 'No heat', 'Broken appliance', 'Other'];
+const MAINTENANCE_ISSUE_TYPES = [
+  "Leak or water issue",
+  "No heat or AC not working", 
+  "Broken appliance",
+  "Electrical problem",
+  "Clogged sink or drain",
+  "Broken lock or door issue",
+  "Pest problem",
+  "Smoke detector issue",
+  "No hot water",
+  "Other"
+];
+
+// Category-specific follow-up questions
+const CATEGORY_FOLLOW_UPS: Record<string, string> = {
+  "Leak or water issue": "Where is the leak happening (kitchen, bathroom, ceiling, etc.)? Is it minor or causing flooding?",
+  "No heat or AC not working": "Is this affecting your entire unit or just one room?",
+  "Broken appliance": "Which appliance is broken? (e.g. stove, fridge, washer)",
+  "Electrical problem": "What electrical issue are you experiencing? (e.g. power out, light fixture not working, outlet issue)",
+  "Clogged sink or drain": "Which sink or drain is clogged (kitchen, bathroom, shower)?",
+  "Broken lock or door issue": "Which door or lock has the problem? Is it preventing you from securing your unit?",
+  "Pest problem": "What kind of pest problem is this (e.g. rodents, roaches, ants)?",
+  "Smoke detector issue": "Is the smoke detector beeping or malfunctioning? Please describe what's happening.",
+  "No hot water": "Is this affecting all your faucets or just one area (kitchen, bathroom)?",
+  "Other": "Please describe what's happening and where, so we can assist as quickly as possible."
+};
 
 type FlowType = 'welcome' | 'maintenance' | 'faq' | 'completed' | 'end_conversation';
 type MaintenanceStep = 'name' | 'unit' | 'contact' | 'issue_type' | 'description' | 'urgency' | 'confirmation';
@@ -157,7 +182,7 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
       });
       setCurrentStep('issue_type');
       addAssistantMessage(
-        "Select the type of issue you're reporting:",
+        "Thanks for letting me know!\n\nWhat kind of issue are you experiencing?\n\nYou can tap one of these common options or describe it in your own words:",
         true,
         MAINTENANCE_ISSUE_TYPES
       );
@@ -188,26 +213,19 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         setSessionData(prev => ({ ...prev, contactInfo: userInput }));
         setCurrentStep('issue_type');
         addAssistantMessage(
-          "Select the type of issue you're reporting:",
+          "Thanks for letting me know!\n\nWhat kind of issue are you experiencing?\n\nYou can tap one of these common options or describe it in your own words:",
           true,
           MAINTENANCE_ISSUE_TYPES
         );
         break;
       
       case 'issue_type':
-        if (userInput === 'Other') {
-          setMaintenanceData(prev => ({ ...prev, issueType: userInput }));
-          setCurrentStep('description');
-          addAssistantMessage("Please describe the issue you're experiencing:");
-        } else {
-          setMaintenanceData(prev => ({ ...prev, issueType: userInput }));
-          setCurrentStep('urgency');
-          addAssistantMessage(
-            "Would you consider this urgent?",
-            true,
-            ['Yes, it\'s urgent', 'No, it\'s routine']
-          );
-        }
+        setMaintenanceData(prev => ({ ...prev, issueType: userInput }));
+        setCurrentStep('description');
+        
+        // Get category-specific follow-up question
+        const followUpQuestion = CATEGORY_FOLLOW_UPS[userInput];
+        addAssistantMessage(followUpQuestion);
         break;
       
       case 'description':
