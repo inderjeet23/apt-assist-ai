@@ -17,27 +17,37 @@ interface MaintenanceRequest {
   tenantName: string;
   unitNumber: string;
   contactInfo: string;
-  description: string;
+  issueType: string;
+  description?: string;
   isUrgent: boolean;
 }
 
+interface SessionData {
+  tenantName?: string;
+  unitNumber?: string;
+  contactInfo?: string;
+}
+
 const FAQ_RESPONSES = {
-  'pay rent': 'Rent can be paid online at [property manager URL] or dropped off at the leasing office during business hours.',
-  'pet policy': 'We allow pets with approval. Please check your lease or contact us for any breed restrictions or fees.',
-  'emergency maintenance': 'Emergencies include no heat, major leaks, flooding, broken locks, and fire hazards. For emergencies, please call [emergency phone number] immediately.',
-  'office hours': 'Our office hours are Monday through Friday, 9am to 5pm.',
-  'maintenance request': 'You can submit requests right here or through your tenant portal at [property manager portal URL].'
+  'pay rent': 'Rent can be paid online at [insert payment URL] or dropped off at the leasing office.',
+  'pet policy': 'We allow pets with approval. Please check your lease or contact us for details.',
+  'emergency maintenance': 'Emergencies include leaks, no heat, flooding, fire hazards, and broken locks. For urgent issues, call [emergency phone number].',
+  'office hours': 'Office hours are Monday–Friday, 9am–5pm.',
 };
 
-const URGENT_KEYWORDS = ['leak', 'flood', 'flooding', 'no heat', 'broken lock', 'fire', 'emergency', 'urgent', 'water damage', 'electrical'];
+const MAINTENANCE_ISSUE_TYPES = ['Leak', 'No heat', 'Broken appliance', 'Other'];
+
+type FlowType = 'welcome' | 'maintenance' | 'faq' | 'completed' | 'end_conversation';
+type MaintenanceStep = 'name' | 'unit' | 'contact' | 'issue_type' | 'description' | 'urgency' | 'confirmation';
 
 export function PropertyAssistant() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [currentFlow, setCurrentFlow] = useState<'initial' | 'faq' | 'maintenance' | 'collecting_info'>('initial');
+  const [currentFlow, setCurrentFlow] = useState<FlowType>('welcome');
   const [maintenanceData, setMaintenanceData] = useState<Partial<MaintenanceRequest>>({});
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState<MaintenanceStep>('name');
+  const [sessionData, setSessionData] = useState<SessionData>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -50,11 +60,12 @@ export function PropertyAssistant() {
   }, [messages]);
 
   useEffect(() => {
-    // Initial greeting
-    addAssistantMessage("Hello! I'm here to help with your property management needs. How can I assist you today?", true, [
-      'I have a question',
-      'I need to report a maintenance issue'
-    ]);
+    // Welcome message with options
+    addAssistantMessage(
+      "Hi! I'm here to help with your property needs. What would you like to do today?",
+      true,
+      ['Report Maintenance Issue', 'Ask a Question']
+    );
   }, []);
 
   const addMessage = (content: string, type: 'user' | 'assistant') => {
@@ -73,7 +84,6 @@ export function PropertyAssistant() {
       setIsTyping(false);
       addMessage(content, 'assistant');
       if (showOptions && options.length > 0) {
-        // Add option buttons after a brief delay
         setTimeout(() => {
           setMessages(prev => [...prev, {
             id: `options-${Date.now()}`,
@@ -89,85 +99,124 @@ export function PropertyAssistant() {
   const checkForFAQ = (userInput: string): string | null => {
     const input = userInput.toLowerCase();
     
-    if (input.includes('pay') && input.includes('rent')) {
+    if (input.includes('pay rent') || (input.includes('pay') && input.includes('rent'))) {
       return FAQ_RESPONSES['pay rent'];
     }
-    if (input.includes('pet')) {
+    if (input.includes('pet policy') || input.includes('pet')) {
       return FAQ_RESPONSES['pet policy'];
     }
-    if (input.includes('emergency') || input.includes('urgent')) {
+    if (input.includes('emergency maintenance') || input.includes('emergency')) {
       return FAQ_RESPONSES['emergency maintenance'];
     }
-    if (input.includes('office') && input.includes('hours')) {
+    if (input.includes('office hours') || (input.includes('office') && input.includes('hours'))) {
       return FAQ_RESPONSES['office hours'];
-    }
-    if (input.includes('maintenance') && input.includes('request')) {
-      return FAQ_RESPONSES['maintenance request'];
     }
     
     return null;
   };
 
-  const isUrgentMaintenance = (description: string): boolean => {
-    const input = description.toLowerCase();
-    return URGENT_KEYWORDS.some(keyword => input.includes(keyword));
-  };
-
   const generateMaintenanceEmail = (request: MaintenanceRequest): string => {
-    const urgencyLabel = request.isUrgent ? 'URGENT' : 'NON-URGENT';
+    const urgencyLabel = request.isUrgent ? 'Urgent' : 'Non-urgent';
     return `
-Subject: [${urgencyLabel}] Maintenance Request from ${request.tenantName}
+Subject: [${urgencyLabel.toUpperCase()}] Maintenance Request from ${request.tenantName}
 
-Tenant Name: ${request.tenantName}
-Unit/Property: ${request.unitNumber}
-Contact Information: ${request.contactInfo}
-Priority: ${urgencyLabel}
-
-Issue Description:
-${request.description}
+Tenant name: ${request.tenantName}
+Unit/address: ${request.unitNumber}
+Contact info: ${request.contactInfo}
+Issue type: ${request.issueType}
+${request.description ? `Description: ${request.description}` : ''}
+Urgent/Non-urgent flag: ${urgencyLabel}
 
 Submitted via Property Assistant on ${new Date().toLocaleString()}
     `.trim();
   };
 
-  const handleMaintenanceFlow = (userInput: string) => {
-    const steps = ['name', 'unit', 'contact', 'description'];
-    const currentStepName = steps[currentStep];
+  const startMaintenanceFlow = () => {
+    setCurrentFlow('maintenance');
+    
+    // Check if we have session data to reuse
+    if (sessionData.tenantName && sessionData.unitNumber && sessionData.contactInfo) {
+      setMaintenanceData({
+        tenantName: sessionData.tenantName,
+        unitNumber: sessionData.unitNumber,
+        contactInfo: sessionData.contactInfo
+      });
+      setCurrentStep('issue_type');
+      addAssistantMessage(
+        "Select the type of issue you're reporting:",
+        true,
+        MAINTENANCE_ISSUE_TYPES
+      );
+    } else {
+      setCurrentStep('name');
+      addAssistantMessage("Great — can I have your name?");
+    }
+  };
 
-    switch (currentStepName) {
+  const handleMaintenanceFlow = (userInput: string) => {
+    switch (currentStep) {
       case 'name':
         setMaintenanceData(prev => ({ ...prev, tenantName: userInput }));
-        addAssistantMessage("Thank you. What's your unit number or property address?");
-        setCurrentStep(1);
+        setSessionData(prev => ({ ...prev, tenantName: userInput }));
+        setCurrentStep('unit');
+        addAssistantMessage("What's your unit number or property address?");
         break;
       
       case 'unit':
         setMaintenanceData(prev => ({ ...prev, unitNumber: userInput }));
+        setSessionData(prev => ({ ...prev, unitNumber: userInput }));
+        setCurrentStep('contact');
         addAssistantMessage("What's the best phone number or email to reach you?");
-        setCurrentStep(2);
         break;
       
       case 'contact':
         setMaintenanceData(prev => ({ ...prev, contactInfo: userInput }));
-        addAssistantMessage("Please describe what's happening and where the problem is located.");
-        setCurrentStep(3);
+        setSessionData(prev => ({ ...prev, contactInfo: userInput }));
+        setCurrentStep('issue_type');
+        addAssistantMessage(
+          "Select the type of issue you're reporting:",
+          true,
+          MAINTENANCE_ISSUE_TYPES
+        );
+        break;
+      
+      case 'issue_type':
+        if (userInput === 'Other') {
+          setMaintenanceData(prev => ({ ...prev, issueType: userInput }));
+          setCurrentStep('description');
+          addAssistantMessage("Please describe the issue you're experiencing:");
+        } else {
+          setMaintenanceData(prev => ({ ...prev, issueType: userInput }));
+          setCurrentStep('urgency');
+          addAssistantMessage(
+            "Would you consider this urgent?",
+            true,
+            ['Yes, it\'s urgent', 'No, it\'s routine']
+          );
+        }
         break;
       
       case 'description':
-        const isUrgent = isUrgentMaintenance(userInput);
+        setMaintenanceData(prev => ({ ...prev, description: userInput }));
+        setCurrentStep('urgency');
+        addAssistantMessage(
+          "Would you consider this urgent?",
+          true,
+          ['Yes, it\'s urgent', 'No, it\'s routine']
+        );
+        break;
+      
+      case 'urgency':
+        const isUrgent = userInput.toLowerCase().includes('urgent') || userInput.toLowerCase().includes('yes');
         const completedRequest: MaintenanceRequest = {
           ...maintenanceData,
-          description: userInput,
           isUrgent
         } as MaintenanceRequest;
 
-        setMaintenanceData(completedRequest);
-        
-        const responseMessage = isUrgent 
-          ? "Thank you. We've flagged this as urgent and will escalate it right away."
-          : "Thanks for letting us know. We'll review and follow up during normal business hours.";
-        
-        addAssistantMessage(responseMessage);
+        const urgencyLabel = isUrgent ? 'Urgent' : 'Non-urgent';
+        addAssistantMessage(
+          `Thank you — your request has been logged and marked as ${urgencyLabel}. We'll review and follow up as soon as possible.`
+        );
         
         // Generate and "send" email
         const emailContent = generateMaintenanceEmail(completedRequest);
@@ -175,72 +224,92 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         
         toast({
           title: "Maintenance Request Submitted",
-          description: `Your ${isUrgent ? 'urgent' : 'non-urgent'} request has been forwarded to the property manager.`,
+          description: `Your ${urgencyLabel.toLowerCase()} request has been forwarded to the property manager.`,
         });
 
-        // Reset flow
+        // Move to end conversation flow
         setTimeout(() => {
-          addAssistantMessage("Is there anything else I can help you with today?", true, [
-            'I have another question',
-            'I need to report another issue'
-          ]);
-          setCurrentFlow('initial');
-          setCurrentStep(0);
-          setMaintenanceData({});
+          setCurrentFlow('end_conversation');
+          addAssistantMessage(
+            "Do you need help with anything else?",
+            true,
+            ['Yes', 'No']
+          );
         }, 2000);
         break;
+    }
+  };
+
+  const handleFAQFlow = (userInput: string) => {
+    const faqResponse = checkForFAQ(userInput);
+    if (faqResponse) {
+      addAssistantMessage(faqResponse);
+    } else {
+      addAssistantMessage("Thanks for your question! We'll forward this to the property manager and they will follow up with you shortly.");
+    }
+    
+    setTimeout(() => {
+      setCurrentFlow('end_conversation');
+      addAssistantMessage(
+        "Do you need help with anything else?",
+        true,
+        ['Yes', 'No']
+      );
+    }, 2000);
+  };
+
+  const handleEndConversation = (userInput: string) => {
+    if (userInput.toLowerCase().includes('yes')) {
+      setCurrentFlow('welcome');
+      setMaintenanceData({});
+      setCurrentStep('name');
+      addAssistantMessage(
+        "What would you like to do?",
+        true,
+        ['Report Maintenance Issue', 'Ask a Question']
+      );
+    } else {
+      addAssistantMessage("Thanks for contacting us! Your request has been received. Have a great day.");
+      setCurrentFlow('completed');
     }
   };
 
   const handleUserInput = (userInput: string) => {
     addMessage(userInput, 'user');
 
-    if (currentFlow === 'initial') {
-      if (userInput.toLowerCase().includes('question')) {
-        setCurrentFlow('faq');
-        addAssistantMessage("What question can I help you with?");
-      } else if (userInput.toLowerCase().includes('maintenance') || userInput.toLowerCase().includes('issue')) {
-        setCurrentFlow('maintenance');
-        setCurrentStep(0);
-        addAssistantMessage("I'll help you report that maintenance issue. First, what's your full name?");
-      } else {
-        // Check if it's a direct FAQ question
-        const faqResponse = checkForFAQ(userInput);
-        if (faqResponse) {
-          addAssistantMessage(faqResponse);
-          setTimeout(() => {
-            addAssistantMessage("Is there anything else I can help you with?", true, [
-              'I have another question',
-              'I need to report a maintenance issue'
-            ]);
-          }, 2000);
-        } else {
-          addAssistantMessage("Thanks for your question! We'll forward this to the property manager and they will follow up with you shortly.");
-          setTimeout(() => {
-            addAssistantMessage("Is there anything else I can help you with?", true, [
-              'I have another question',
-              'I need to report a maintenance issue'
-            ]);
-          }, 2000);
+    switch (currentFlow) {
+      case 'welcome':
+        if (userInput.includes('Report Maintenance Issue')) {
+          startMaintenanceFlow();
+        } else if (userInput.includes('Ask a Question')) {
+          setCurrentFlow('faq');
+          addAssistantMessage("What question can I help you with?");
         }
-      }
-    } else if (currentFlow === 'faq') {
-      const faqResponse = checkForFAQ(userInput);
-      if (faqResponse) {
-        addAssistantMessage(faqResponse);
-      } else {
-        addAssistantMessage("Thanks for your question! We'll forward this to the property manager and they will follow up with you shortly.");
-      }
+        break;
       
-      setTimeout(() => {
-        addAssistantMessage("Is there anything else I can help you with?", true, [
-          'I have another question',
-          'I need to report a maintenance issue'
-        ]);
-        setCurrentFlow('initial');
-      }, 2000);
-    } else if (currentFlow === 'maintenance') {
-      handleMaintenanceFlow(userInput);
+      case 'maintenance':
+        handleMaintenanceFlow(userInput);
+        break;
+      
+      case 'faq':
+        handleFAQFlow(userInput);
+        break;
+      
+      case 'end_conversation':
+        handleEndConversation(userInput);
+        break;
+      
+      case 'completed':
+        // Restart conversation
+        setCurrentFlow('welcome');
+        setMaintenanceData({});
+        setCurrentStep('name');
+        addAssistantMessage(
+          "Hi! I'm here to help with your property needs. What would you like to do today?",
+          true,
+          ['Report Maintenance Issue', 'Ask a Question']
+        );
+        break;
     }
   };
 
@@ -259,7 +328,7 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
   return (
     <div className="max-w-2xl mx-auto h-screen flex flex-col bg-background">
       {/* Header */}
-      <div className="bg-property-blue text-white p-4 flex items-center gap-3">
+      <div className="bg-primary text-primary-foreground p-4 flex items-center gap-3">
         <Building2 className="h-6 w-6" />
         <div>
           <h1 className="font-semibold">Property Assistant</h1>
