@@ -78,7 +78,12 @@ export const useVoiceInput = ({ onTranscript, onError }: VoiceInputOptions) => {
   }, [onTranscript, onError]);
 
   const startListening = useCallback(() => {
-    if (!recognitionRef.current && isSupported) {
+    if (!isSupported) {
+      onError?.('Voice input is not supported in this browser');
+      return;
+    }
+
+    if (!recognitionRef.current) {
       initializeRecognition();
     }
     
@@ -86,20 +91,33 @@ export const useVoiceInput = ({ onTranscript, onError }: VoiceInputOptions) => {
       try {
         recognitionRef.current.start();
       } catch (error) {
-        onError?.('Failed to start voice recognition');
+        console.error('Voice recognition error:', error);
+        onError?.('Failed to start voice recognition. Please check microphone permissions.');
       }
     }
   }, [initializeRecognition, isListening, isSupported, onError]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping voice recognition:', error);
+      }
     }
   }, [isListening]);
 
   // Initialize on first render
   useEffect(() => {
     initializeRecognition();
+    
+    // Cleanup function
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
   }, [initializeRecognition]);
 
   return {
