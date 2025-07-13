@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -22,13 +21,15 @@ export function ChatMessage({ message, onOptionClick }: ChatMessageProps) {
     try {
       const optionsData = JSON.parse(message.content);
       return (
-        <div className="flex justify-start animate-fade-in">
-          <div className="max-w-xs space-y-2">
+        <div className="flex justify-start animate-fade-in mb-3">
+          <div className="max-w-sm space-y-2">
             {optionsData.options.map((option: string, index: number) => (
               <Button
                 key={index}
                 variant="outline"
-                className="w-full text-left justify-start h-auto py-3 px-4 whitespace-normal"
+                className="w-full text-left justify-start h-auto py-3 px-4 whitespace-normal rounded-full 
+                         border-primary/20 bg-background hover:bg-primary hover:text-primary-foreground 
+                         transition-all duration-200 shadow-sm hover:shadow-md font-medium"
                 onClick={() => onOptionClick?.(option)}
               >
                 {option}
@@ -46,26 +47,26 @@ export function ChatMessage({ message, onOptionClick }: ChatMessageProps) {
 
   return (
     <div className={cn(
-      "flex animate-fade-in",
+      "flex animate-fade-in mb-3",
       isUser ? "justify-end" : "justify-start"
     )}>
-      <Card className={cn(
-        "max-w-xs lg:max-w-md px-4 py-3",
+      <div className={cn(
+        "max-w-xs lg:max-w-md px-4 py-3 shadow-sm",
         isUser 
-          ? "bg-chat-user-bg text-chat-user-text border-transparent" 
-          : "bg-chat-assistant-bg text-chat-assistant-text"
+          ? "bg-chat-user-bg text-chat-user-text rounded-[18px] rounded-br-md" 
+          : "bg-chat-assistant-bg text-chat-assistant-text rounded-[18px] rounded-bl-md border border-border"
       )}>
-        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
         <span className={cn(
-          "text-xs mt-2 block",
-          isUser ? "text-chat-user-text/70" : "text-muted-foreground"
+          "text-xs mt-2 block opacity-70",
+          isUser ? "text-chat-user-text" : "text-muted-foreground"
         )}>
           {message.timestamp.toLocaleTimeString([], { 
             hour: '2-digit', 
             minute: '2-digit' 
           })}
         </span>
-      </Card>
+      </div>
     </div>
   );
 }

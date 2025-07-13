@@ -8,52 +8,59 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 220 23% 97%;
-    --foreground: 215 25% 27%;
+    /* Modern chat interface colors - light grey/white theme */
+    --background: 0 0% 97%;
+    --foreground: 224 15% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
+    --card-foreground: 224 15% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
+    --popover-foreground: 224 15% 15%;
 
-    --primary: 217 91% 60%;
+    /* Property brand color - professional blue */
+    --primary: 210 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 215 25% 27%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 224 15% 15%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 224 15% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 215 25% 27%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 224 15% 15%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 217 91% 60%;
+    --border: 0 0% 90%;
+    --input: 0 0% 100%;
+    --ring: 210 100% 50%;
 
     /* Property management specific colors */
-    --property-blue: 217 91% 60%;
+    --property-blue: 210 100% 50%;
     --property-blue-light: 213 94% 68%;
-    --property-blue-dark: 217 91% 45%;
+    --property-blue-dark: 210 100% 40%;
     --property-success: 142 76% 36%;
     --property-warning: 25 95% 53%;
     --property-neutral: 220 9% 46%;
 
-    /* Chat specific colors */
-    --chat-user-bg: 217 91% 60%;
+    /* Chat specific colors - modern ChatGPT-like */
+    --chat-user-bg: 210 100% 50%;
     --chat-user-text: 0 0% 100%;
-    --chat-assistant-bg: 0 0% 100%;
-    --chat-assistant-text: 215 25% 27%;
+    --chat-assistant-bg: 0 0% 96%;
+    --chat-assistant-text: 224 15% 15%;
     --chat-input-bg: 0 0% 100%;
+    --chat-bubble-radius: 18px;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(213 94% 68%));
-    --gradient-subtle: linear-gradient(180deg, hsl(220 23% 97%), hsl(220 14% 96%));
+    /* Gradients - modern clean look */
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%), hsl(213 94% 68%));
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 98%), hsl(0 0% 96%));
+    
+    /* Chat spacing improvements */
+    --chat-message-spacing: 0.5rem;
+    --chat-padding: 1rem;
 
     --radius: 0.5rem;
 

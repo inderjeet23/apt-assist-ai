@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
-import { Send, Building2, MessageCircle } from 'lucide-react';
+import { Send, Building2, MessageCircle, Mic, MicOff } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
 import { useToast } from '@/hooks/use-toast';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
+import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -50,6 +51,19 @@ export function PropertyAssistant() {
   const [sessionData, setSessionData] = useState<SessionData>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const { isListening, isSupported, startListening, stopListening } = useVoiceInput({
+    onTranscript: (transcript) => {
+      setInput(transcript);
+    },
+    onError: (error) => {
+      toast({
+        title: "Voice Input Error",
+        description: "Unable to process voice input. Please try typing instead.",
+        variant: "destructive",
+      });
+    }
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -325,49 +339,98 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
     }
   };
 
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   return (
-    <div className="max-w-2xl mx-auto h-screen flex flex-col bg-background">
+    <div className="max-w-4xl mx-auto h-screen flex flex-col bg-background">
       {/* Header */}
-      <div className="bg-primary text-primary-foreground p-4 flex items-center gap-3">
-        <Building2 className="h-6 w-6" />
+      <div className="bg-primary text-primary-foreground p-4 flex items-center gap-3 shadow-sm">
+        <div className="w-8 h-8 bg-primary-foreground/10 rounded-lg flex items-center justify-center">
+          <Building2 className="h-5 w-5" />
+        </div>
         <div>
-          <h1 className="font-semibold">Property Assistant</h1>
+          <h1 className="font-semibold text-lg">[Property Name] Assistant</h1>
           <p className="text-sm opacity-90">Here to help with your property needs</p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            message={message}
-            onOptionClick={handleOptionClick}
-          />
-        ))}
-        {isTyping && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <MessageCircle className="h-4 w-4" />
-            <span className="text-sm">Assistant is typing...</span>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+      <div className="flex-1 overflow-y-auto px-4 py-6" style={{ scrollBehavior: 'smooth' }}>
+        <div className="max-w-3xl mx-auto">
+          {messages.map((message) => (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              onOptionClick={handleOptionClick}
+            />
+          ))}
+          {isTyping && (
+            <div className="flex items-center gap-2 text-muted-foreground mb-3 animate-fade-in">
+              <div className="bg-chat-assistant-bg border border-border rounded-[18px] rounded-bl-md px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                  <span className="text-sm">Assistant is typing...</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input */}
-      <Card className="m-4 p-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1"
-          />
-          <Button type="submit" size="icon" disabled={!input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
-      </Card>
+      <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="max-w-3xl mx-auto p-4">
+          <form onSubmit={handleSubmit} className="flex gap-3 items-end">
+            <div className="flex-1 relative">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Type your message..."
+                className="pr-12 py-3 text-base rounded-full border-border bg-chat-input-bg 
+                          focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                disabled={isListening}
+              />
+              {isSupported && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className={cn(
+                    "absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full",
+                    isListening ? "bg-red-100 text-red-600 hover:bg-red-200" : "hover:bg-muted"
+                  )}
+                  onClick={handleVoiceToggle}
+                >
+                  {isListening ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+            </div>
+            <Button 
+              type="submit" 
+              size="icon" 
+              disabled={!input.trim()}
+              className="h-12 w-12 rounded-full bg-primary hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl"
+            >
+              <Send className="h-5 w-5" />
+            </Button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
