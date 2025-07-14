@@ -146,7 +146,7 @@ export function PropertyAssistant() {
           issueType: request.issueType,
           description: request.description,
           urgency: request.isUrgent ? "Yes, it's urgent" : "No, it's routine",
-          recipientEmail: 'your_email_here@example.com' // Replace with actual property manager email
+          recipientEmail: 'inder1297@gmail.com'
         }
       });
 
