@@ -6,6 +6,7 @@ import { ChatMessage } from './ChatMessage';
 import { useToast } from '@/hooks/use-toast';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -135,6 +136,35 @@ export function PropertyAssistant() {
     }, 1000);
   };
 
+  const sendMaintenanceEmail = async (request: MaintenanceRequest) => {
+    try {
+      const response = await supabase.functions.invoke('send-maintenance-email', {
+        body: {
+          tenantName: request.tenantName,
+          unit: request.unitNumber,
+          contactInfo: request.contactInfo,
+          issueType: request.issueType,
+          description: request.description,
+          urgency: request.isUrgent ? "Yes, it's urgent" : "No, it's routine",
+          recipientEmail: 'your_email_here@example.com' // Replace with actual property manager email
+        }
+      });
+
+      if (response.error) {
+        console.error('Error sending maintenance email:', response.error);
+        toast({
+          title: "Email Error",
+          description: "Could not send email to property manager, but your request was logged.",
+          variant: "destructive",
+        });
+      } else {
+        console.log('Maintenance email sent successfully');
+      }
+    } catch (error) {
+      console.error('Error sending maintenance email:', error);
+    }
+  };
+
   const checkForFAQ = (userInput: string): string | null => {
     const input = userInput.toLowerCase();
     
@@ -192,7 +222,7 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
     }
   };
 
-  const handleMaintenanceFlow = (userInput: string) => {
+  const handleMaintenanceFlow = async (userInput: string) => {
     switch (currentStep) {
       case 'name':
         setMaintenanceData(prev => ({ ...prev, tenantName: userInput }));
@@ -246,13 +276,13 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         } as MaintenanceRequest;
 
         const urgencyLabel = isUrgent ? 'Urgent' : 'Non-urgent';
-        addAssistantMessage(
-          `Thank you — your request has been logged and marked as ${urgencyLabel}. We'll review and follow up as soon as possible.`
-        );
         
-        // Generate and "send" email
-        const emailContent = generateMaintenanceEmail(completedRequest);
-        console.log('Generated maintenance email:', emailContent);
+        // Send email to property manager
+        await sendMaintenanceEmail(completedRequest);
+        
+        addAssistantMessage(
+          `Thank you! Your maintenance request has been submitted and sent to the property manager. Our team will contact you soon.`
+        );
         
         toast({
           title: "Maintenance Request Submitted",
@@ -306,7 +336,7 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
     }
   };
 
-  const handleUserInput = (userInput: string) => {
+  const handleUserInput = async (userInput: string) => {
     addMessage(userInput, 'user');
 
     switch (currentFlow) {
@@ -320,7 +350,7 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         break;
       
       case 'maintenance':
-        handleMaintenanceFlow(userInput);
+        await handleMaintenanceFlow(userInput);
         break;
       
       case 'faq':
@@ -345,14 +375,14 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
     }
   };
 
-  const handleOptionClick = (option: string) => {
-    handleUserInput(option);
+  const handleOptionClick = async (option: string) => {
+    await handleUserInput(option);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim()) {
-      handleUserInput(input);
+      await handleUserInput(input);
       setInput('');
     }
   };
