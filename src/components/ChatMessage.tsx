@@ -1,201 +1,34 @@
-// apt-assist-ai-main/src/components/Chat.tsx
-
-import { useState, useEffect, useRef } from "react";
-import { supabase } from "../integrations/supabase/client"; 
+import { cn } from '@/lib/utils';
 
 interface Message {
-  text: string;
-  from: "user" | "bot";
-  options?: string[];
-  onOptionClick?: (option: string) => void;
+  id: string;
+  type: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
 }
 
-interface RentRecord {
-  due_date: string;
-  amount_due: number;
-  status: string;
+interface ChatMessageProps {
+  message: Message;
+  onOptionClick: (option: string) => Promise<void>;
 }
 
-const Chat = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [botId, setBotId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversationState, setConversationState] = useState("idle");
-  const [tenantInfo, setTenantInfo] = useState({ name: "", unit: "" });
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const pathParts = window.location.pathname.split('/');
-    const id = pathParts[pathParts.length - 1];
-    setBotId(id);
-
-    setMessages([
-      { text: "Hello! How can I help you today?", from: "bot" }
-    ]);
-  }, []);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const handleSend = async (messageText?: string) => {
-    const text = (messageText || input).trim();
-    if (!text) return;
-
-    const newMessages: Message[] = [...messages, { text, from: "user" }];
-    setMessages(newMessages);
-    setInput("");
-    setIsLoading(true);
-
-    if (conversationState === "awaiting_name") {
-      setTenantInfo(prev => ({ ...prev, name: text }));
-      setConversationState("awaiting_unit");
-      setMessages(prev => [...prev, { text: "Thanks! What is your unit number?", from: "bot" }]);
-    } else if (conversationState === "awaiting_unit") {
-      const currentTenantInfo = { ...tenantInfo, unit: text };
-      setTenantInfo(currentTenantInfo);
-      setConversationState("fetching_rent");
-      await fetchRentStatus(currentTenantInfo.name, text);
-    } else {
-        let botResponse = "I'm sorry, I can only help with maintenance requests or rent inquiries at the moment.";
-
-        if (text.toLowerCase().includes("maintenance")) {
-            botResponse = "To submit a maintenance request, please describe the issue.";
-        } else if (text.toLowerCase() === "rent") {
-            botResponse = "To check your rent status, please provide your full name.";
-            setConversationState("awaiting_name");
-        }
-
-        setMessages(prev => [...prev, { text: botResponse, from: "bot" }]);
-    }
-
-    setIsLoading(false);
-  };
-
-  const fetchRentStatus = async (name: string, unit: string) => {
-    setIsLoading(true);
-
-    try {
-        const { data: tenant, error: tenantError } = await supabase
-            .from('tenants')
-            .select('id')
-            .eq('name', name)
-            .eq('unit_number', unit)
-            .single();
-
-        if (tenantError || !tenant) {
-            setMessages(prev => [...prev, { text: "I could not find a tenant with that name and unit number. Please try again.", from: "bot" }]);
-            setConversationState("idle");
-            return;
-        }
-
-        const { data: rentRecord, error: rentError } = await supabase
-            .from('rent_records')
-            .select('*')
-            .eq('tenant_id', tenant.id)
-            .order('due_date', { ascending: false })
-            .limit(1)
-            .single();
-
-        if (rentError || !rentRecord) {
-            setMessages(prev => [...prev, { text: "I could not find any rent records for you.", from: "bot" }]);
-        } else {
-            const { amount_due, due_date, status } = rentRecord;
-            const dueDate = new Date(due_date).toLocaleDateString();
-            const response = `Your next rent payment of $${amount_due} is due on ${dueDate}. The current status is: ${status}.`;
-            setMessages(prev => [...prev, { text: response, from: "bot", options: ["Pay Rent"], onOptionClick: handlePayRent }]);
-        }
-
-    } catch (error) {
-        console.error("Error fetching rent status:", error);
-        setMessages(prev => [...prev, { text: "I'm sorry, I'm having trouble fetching your rent status right now. Please try again later.", from: "bot" }]);
-    } finally {
-        setIsLoading(false);
-        setConversationState("idle");
-    }
-  };
-
-
-  const handleRentInquiry = () => {
-    setMessages(prev => [...prev, { text: "Rent", from: "user" }]);
-    setConversationState("awaiting_name");
-    setMessages(prev => [...prev, { text: "To check your rent status, please provide your full name.", from: "bot" }]);
-  };
-  
-  const handlePayRent = () => {
-    setMessages(prev => [...prev, { text: "You can pay your rent through our online payment portal. Please note, this is a placeholder and not a real payment link.", from: "bot" }]);
-  };
-
-
+export const ChatMessage = ({ message, onOptionClick }: ChatMessageProps) => {
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <div className="bg-blue-600 text-white p-4 text-center">
-        <h1 className="text-lg font-semibold">Apt Assist AI</h1>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, index) => (
-          <div key={index} className={`flex ${msg.from === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`${msg.from === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"} rounded-lg px-4 py-2 max-w-sm`}>
-              {msg.text}
-              {msg.options && (
-                <div className="mt-2">
-                  {msg.options.map((option, i) => (
-                    <button
-                      key={i}
-                      onClick={() => msg.onOptionClick && msg.onOptionClick(option)}
-                      className="w-full text-left px-3 py-1 mt-1 text-sm border rounded-full text-blue-600 border-blue-600 hover:bg-blue-50"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-            <div className="flex justify-start">
-                <div className="bg-gray-200 rounded-lg px-4 py-2 text-gray-700 max-w-sm">
-                    ...
-                </div>
-            </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="p-4 border-t bg-white">
-        <div className="flex gap-2 mb-2">
-            <button
-                onClick={() => handleSend("New Maintenance Request")}
-                className="px-3 py-1 text-sm border rounded-full text-blue-600 border-blue-600 hover:bg-blue-50"
-            >
-                New Maintenance Request
-            </button>
-            <button
-                onClick={handleRentInquiry}
-                className="px-3 py-1 text-sm border rounded-full text-blue-600 border-blue-600 hover:bg-blue-50"
-            >
-                Rent
-            </button>
-        </div>
-        <div className="flex">
-            <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                className="flex-1 p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Type your message..."
-            />
-            <button onClick={() => handleSend()} className="bg-blue-500 text-white px-4 rounded-r-lg">
-                Send
-            </button>
-        </div>
+    <div className={cn(
+      "flex mb-4",
+      message.type === 'user' ? 'justify-end' : 'justify-start'
+    )}>
+      <div className={cn(
+        "max-w-[80%] rounded-lg px-4 py-2",
+        message.type === 'user' 
+          ? 'bg-primary text-primary-foreground' 
+          : 'bg-muted text-muted-foreground'
+      )}>
+        <p className="text-sm">{message.content}</p>
+        <span className="text-xs opacity-70 mt-1 block">
+          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
       </div>
     </div>
   );
 };
-
-export default Chat;
