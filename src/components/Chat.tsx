@@ -5,6 +5,7 @@ import { supabase } from "../integrations/supabase/client";
 import PlaceholderComponent from "./chat-components/PlaceholderComponent";
 import MaintenanceRequestForm from "./chat-components/MaintenanceRequestForm";
 import RentStatusCard from "./chat-components/RentStatusCard";
+import SuggestedActions from "./chat-components/SuggestedActions";
 import { X } from "lucide-react";
 
 interface Message {
@@ -22,7 +23,6 @@ interface RentRecord {
   status: string;
 }
 
-
 const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -38,14 +38,49 @@ const Chat = () => {
     const id = pathParts[pathParts.length - 1];
     setBotId(id);
 
-    setMessages([
-      { text: "Hello! How can I help you today?", from: "bot" }
-    ]);
+    // Proactive welcome flow
+    const initializeChat = () => {
+      const greetingMessage: Message = {
+        from: "bot",
+        text: "Hello! I am your property assistant. How can I help you today?"
+      };
+
+      const actionsMessage: Message = {
+        from: "bot",
+        component: <SuggestedActions onActionClick={handleSuggestedAction} />
+      };
+
+      setMessages([greetingMessage, actionsMessage]);
+    };
+
+    initializeChat();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleSuggestedAction = (action: string) => {
+    if (action === "maintenance") {
+      setMessages(prev => [
+        ...prev,
+        { text: "Report a Maintenance Issue", from: "user" },
+        { 
+          from: "bot", 
+          text: "I can help with that. Please provide the details below:",
+          component: <MaintenanceRequestForm onSubmit={handleMaintenanceSubmit} />
+        }
+      ]);
+      setConversationMode('maintenance');
+    } else if (action === "rent") {
+      setMessages(prev => [
+        ...prev,
+        { text: "Check Rent Status", from: "user" },
+        { text: "I'll help you check your rent status. Please provide your full name.", from: "bot" }
+      ]);
+      setConversationState("awaiting_name");
+    }
+  };
 
   const handleSend = async (messageText?: string) => {
     const text = (messageText || input).trim();
@@ -131,10 +166,6 @@ const Chat = () => {
     }
   };
 
-  const handleTestComponent = () => {
-    setMessages(prev => [...prev, { from: "bot", component: <PlaceholderComponent /> }]);
-  };
-
   const handleMaintenanceSubmit = async (data: any) => {
     setIsLoading(true);
     
@@ -200,17 +231,6 @@ ${triageResult?.status === 'Scheduled' ? "🚀 Your request has been automatical
     }
   };
 
-
-  const handleRentInquiry = () => {
-    setMessages(prev => [...prev, { text: "Rent", from: "user" }]);
-    setConversationState("awaiting_name");
-    setMessages(prev => [...prev, { text: "To check your rent status, please provide your full name.", from: "bot" }]);
-  };
-  
-  const handlePayRent = () => {
-    setMessages(prev => [...prev, { text: "You can pay your rent through our online payment portal. Please note, this is a placeholder and not a real payment link.", from: "bot" }]);
-  };
-
   // File upload function
   const uploadFile = async (file: File): Promise<string | null> => {
     try {
@@ -236,8 +256,6 @@ ${triageResult?.status === 'Scheduled' ? "🚀 Your request has been automatical
       return null;
     }
   };
-
-
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -293,26 +311,6 @@ ${triageResult?.status === 'Scheduled' ? "🚀 Your request has been automatical
       </div>
 
       <div className="p-4 border-t bg-white">
-        <div className="flex gap-2 mb-2">
-            <button
-                onClick={() => handleSend("New Maintenance Request")}
-                className="px-3 py-1 text-sm border rounded-full text-blue-600 border-blue-600 hover:bg-blue-50"
-            >
-                New Maintenance Request
-            </button>
-            <button
-                onClick={handleRentInquiry}
-                className="px-3 py-1 text-sm border rounded-full text-blue-600 border-blue-600 hover:bg-blue-50"
-            >
-                Rent
-            </button>
-            <button
-                onClick={handleTestComponent}
-                className="px-3 py-1 text-sm border rounded-full text-green-600 border-green-600 hover:bg-green-50"
-            >
-                Test Component
-            </button>
-        </div>
         <div className="flex">
             <input
                 type="text"
