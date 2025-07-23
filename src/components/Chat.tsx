@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../integrations/supabase/client"; 
 import PlaceholderComponent from "./chat-components/PlaceholderComponent";
 import MaintenanceRequestForm from "./chat-components/MaintenanceRequestForm";
+import RentStatusCard from "./chat-components/RentStatusCard";
 
 interface Message {
   from: "user" | "bot";
@@ -69,11 +70,11 @@ const Chat = () => {
               { from: "bot", text: "Of course! I'll help you submit a maintenance request. Please provide the details below." },
               { from: "bot", component: <MaintenanceRequestForm onSubmit={handleMaintenanceSubmit} /> }
             ]);
-        } else if (text.toLowerCase() === "rent") {
-            botResponse = "To check your rent status, please provide your full name.";
+        } else if (text.toLowerCase().includes("rent") || text.toLowerCase().includes("balance") || text.toLowerCase().includes("payment")) {
             setConversationState("awaiting_name");
-            setMessages(prev => [...prev, { text: botResponse, from: "bot" }]);
+            setMessages(prev => [...prev, { text: "I'll help you check your rent status. Please provide your full name.", from: "bot" }]);
         } else {
+            const botResponse = "I'm sorry, I can only help with maintenance requests or rent inquiries at the moment.";
             setMessages(prev => [...prev, { text: botResponse, from: "bot" }]);
         }
     }
@@ -84,10 +85,28 @@ const Chat = () => {
   const fetchRentStatus = async (name: string, unit: string) => {
     setIsLoading(true);
     
-    // Simplified for demo - remove database calls that cause TypeScript errors
-    setMessages(prev => [...prev, { text: "Database functionality temporarily disabled. This is a demo of the rent status feature.", from: "bot", options: ["Pay Rent"], onOptionClick: handlePayRent }]);
-    setIsLoading(false);
-    setConversationState("idle");
+    try {
+      // For demo purposes, using mock data since database calls cause TypeScript errors
+      const mockRentData = {
+        amountDue: 1500,
+        dueDate: new Date(2025, 1, 1).toISOString(), // February 1, 2025
+        status: "pending",
+        amountPaid: 0,
+        lateFeesAmount: 0
+      };
+
+      setMessages(prev => [
+        ...prev,
+        { from: "bot", text: `Here's your rent information for ${name} at unit ${unit}:` },
+        { from: "bot", component: <RentStatusCard {...mockRentData} /> }
+      ]);
+    } catch (error) {
+      console.error("Error fetching rent status:", error);
+      setMessages(prev => [...prev, { text: "I'm sorry, I'm having trouble fetching your rent status right now. Please try again later.", from: "bot" }]);
+    } finally {
+      setIsLoading(false);
+      setConversationState("idle");
+    }
   };
 
   const handleTestComponent = () => {
