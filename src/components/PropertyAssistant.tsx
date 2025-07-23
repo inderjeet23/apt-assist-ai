@@ -13,6 +13,7 @@ interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  options?: string[];
 }
 
 interface MaintenanceRequest {
@@ -103,36 +104,26 @@ export function PropertyAssistant() {
     // Welcome message with options
     addAssistantMessage(
       "Hi! I'm here to help with your property needs. What would you like to do today?",
-      true,
       ['Report Maintenance Issue', 'Ask a Question']
     );
   }, []);
 
-  const addMessage = (content: string, type: 'user' | 'assistant') => {
+  const addMessage = (content: string, type: 'user' | 'assistant', options?: string[]) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       type,
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
+      options
     };
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const addAssistantMessage = (content: string, showOptions = false, options: string[] = []) => {
+  const addAssistantMessage = (content: string, options?: string[]) => {
     setIsTyping(true);
     setTimeout(() => {
       setIsTyping(false);
-      addMessage(content, 'assistant');
-      if (showOptions && options.length > 0) {
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            id: `options-${Date.now()}`,
-            type: 'assistant',
-            content: JSON.stringify({ type: 'options', options }),
-            timestamp: new Date()
-          }]);
-        }, 500);
-      }
+      addMessage(content, 'assistant', options);
     }, 1000);
   };
 
@@ -213,7 +204,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
       setCurrentStep('issue_type');
       addAssistantMessage(
         "Thanks for letting me know!\n\nWhat kind of issue are you experiencing?\n\nYou can tap one of these common options or describe it in your own words:",
-        true,
         MAINTENANCE_ISSUE_TYPES
       );
     } else {
@@ -244,7 +234,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         setCurrentStep('issue_type');
         addAssistantMessage(
           "Thanks for letting me know!\n\nWhat kind of issue are you experiencing?\n\nYou can tap one of these common options or describe it in your own words:",
-          true,
           MAINTENANCE_ISSUE_TYPES
         );
         break;
@@ -263,7 +252,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         setCurrentStep('urgency');
         addAssistantMessage(
           "Would you consider this urgent?",
-          true,
           ['Yes, it\'s urgent', 'No, it\'s routine']
         );
         break;
@@ -294,7 +282,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
           setCurrentFlow('end_conversation');
           addAssistantMessage(
             "Do you need help with anything else?",
-            true,
             ['Yes', 'No']
           );
         }, 2000);
@@ -314,7 +301,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
       setCurrentFlow('end_conversation');
       addAssistantMessage(
         "Do you need help with anything else?",
-        true,
         ['Yes', 'No']
       );
     }, 2000);
@@ -327,7 +313,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
       setCurrentStep('name');
       addAssistantMessage(
         "What would you like to do?",
-        true,
         ['Report Maintenance Issue', 'Ask a Question']
       );
     } else {
@@ -368,7 +353,6 @@ Submitted via Property Assistant on ${new Date().toLocaleString()}
         setCurrentStep('name');
         addAssistantMessage(
           "Hi! I'm here to help with your property needs. What would you like to do today?",
-          true,
           ['Report Maintenance Issue', 'Ask a Question']
         );
         break;
