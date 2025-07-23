@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../integrations/supabase/client"; 
 import PlaceholderComponent from "./chat-components/PlaceholderComponent";
+import MaintenanceRequestForm from "./chat-components/MaintenanceRequestForm";
 
 interface Message {
   from: "user" | "bot";
@@ -62,14 +63,19 @@ const Chat = () => {
     } else {
         let botResponse = "I'm sorry, I can only help with maintenance requests or rent inquiries at the moment.";
 
-        if (text.toLowerCase().includes("maintenance")) {
-            botResponse = "To submit a maintenance request, please describe the issue.";
+        if (text.toLowerCase().includes("maintenance") || text.toLowerCase().includes("broken") || text.toLowerCase().includes("leak") || text.toLowerCase().includes("repair")) {
+            setMessages(prev => [
+              ...prev,
+              { from: "bot", text: "Of course! I'll help you submit a maintenance request. Please provide the details below." },
+              { from: "bot", component: <MaintenanceRequestForm onSubmit={handleMaintenanceSubmit} /> }
+            ]);
         } else if (text.toLowerCase() === "rent") {
             botResponse = "To check your rent status, please provide your full name.";
             setConversationState("awaiting_name");
+            setMessages(prev => [...prev, { text: botResponse, from: "bot" }]);
+        } else {
+            setMessages(prev => [...prev, { text: botResponse, from: "bot" }]);
         }
-
-        setMessages(prev => [...prev, { text: botResponse, from: "bot" }]);
     }
 
     setIsLoading(false);
@@ -86,6 +92,22 @@ const Chat = () => {
 
   const handleTestComponent = () => {
     setMessages(prev => [...prev, { from: "bot", component: <PlaceholderComponent /> }]);
+  };
+
+  const handleMaintenanceSubmit = (data: any) => {
+    console.log("Maintenance request submitted:", data);
+    
+    // Replace the form with a confirmation message
+    setMessages(prev => {
+      const newMessages = [...prev];
+      // Remove the form component (last message) and add confirmation
+      newMessages.pop();
+      newMessages.push({
+        from: "bot",
+        text: `Thank you! Your ${data.priority} priority maintenance request has been submitted. ${data.permissionGranted ? "We have permission to enter your unit." : "Please note: We'll need to schedule access to your unit."} You should receive an update within 24 hours.`
+      });
+      return newMessages;
+    });
   };
 
 
