@@ -5,7 +5,7 @@ import { supabase } from "../integrations/supabase/client";
 import PlaceholderComponent from "./chat-components/PlaceholderComponent";
 import MaintenanceRequestForm from "./chat-components/MaintenanceRequestForm";
 import RentStatusCard from "./chat-components/RentStatusCard";
-import { Upload, X } from "lucide-react";
+import { X } from "lucide-react";
 
 interface Message {
   from: "user" | "bot";
@@ -22,16 +22,6 @@ interface RentRecord {
   status: string;
 }
 
-interface MaintenanceConversation {
-  initialDescription: string;
-  followUpQuestion?: string;
-  followUpAnswer?: string;
-  uploadedFiles: string[];
-  conversationHistory: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
-}
 
 const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -39,11 +29,9 @@ const Chat = () => {
   const [botId, setBotId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationState, setConversationState] = useState("idle");
+  const [conversationMode, setConversationMode] = useState<'idle' | 'maintenance' | 'rent'>('idle');
   const [tenantInfo, setTenantInfo] = useState({ name: "", unit: "" });
-  const [maintenanceConversation, setMaintenanceConversation] = useState<MaintenanceConversation | null>(null);
-  const [showFileUpload, setShowFileUpload] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const pathParts = window.location.pathname.split('/');
@@ -79,12 +67,6 @@ const Chat = () => {
         setTenantInfo(currentTenantInfo);
         setConversationState("fetching_rent");
         await fetchRentStatus(currentTenantInfo.name, text);
-      } else if (conversationState === "maintenance_request") {
-        // This is the initial description for maintenance
-        await handleMaintenanceDescription(text);
-      } else if (conversationState === "maintenance_followup") {
-        // This is the follow-up answer
-        await handleMaintenanceFollowUp(text);
       } else {
         // Check for maintenance keywords
         if (text.toLowerCase().includes("maintenance") || 
@@ -93,7 +75,12 @@ const Chat = () => {
             text.toLowerCase().includes("repair") ||
             text.toLowerCase().includes("fix") ||
             text.toLowerCase().includes("issue")) {
-          await initiateMaintenanceRequest();
+          setConversationMode('maintenance');
+          setMessages(prev => [...prev, { 
+            from: "bot", 
+            text: "I can help with that. Please provide the details below:",
+            component: <MaintenanceRequestForm onSubmit={handleMaintenanceSubmit} />
+          }]);
         } else if (text.toLowerCase().includes("rent") || 
                    text.toLowerCase().includes("balance") || 
                    text.toLowerCase().includes("payment")) {
@@ -148,20 +135,69 @@ const Chat = () => {
     setMessages(prev => [...prev, { from: "bot", component: <PlaceholderComponent /> }]);
   };
 
-  const handleMaintenanceSubmit = (data: any) => {
-    console.log("Maintenance request submitted:", data);
+  const handleMaintenanceSubmit = async (data: any) => {
+    setIsLoading(true);
     
-    // Replace the form with a confirmation message
-    setMessages(prev => {
-      const newMessages = [...prev];
-      // Remove the form component (last message) and add confirmation
-      newMessages.pop();
-      newMessages.push({
-        from: "bot",
-        text: `Thank you! Your ${data.priority} priority maintenance request has been submitted. ${data.permissionGranted ? "We have permission to enter your unit." : "Please note: We'll need to schedule access to your unit."} You should receive an update within 24 hours.`
+    try {
+      // Upload files to Supabase Storage if any
+      const mediaUrls: string[] = [];
+      if (data.files && data.files.length > 0) {
+        for (let i = 0; i < data.files.length; i++) {
+          const file = data.files[i];
+          const uploadedUrl = await uploadFile(file);
+          if (uploadedUrl) {
+            mediaUrls.push(uploadedUrl);
+          }
+        }
+      }
+
+      // Prepare payload for triage function
+      const payload = {
+        description: data.description,
+        media_url: mediaUrls.length > 0 ? mediaUrls[0] : null, // Use first file for now
+        tenant_urgency: data.priority,
+        permission_to_enter: data.permissionGranted,
+        tenant_id: "demo-tenant-123" // In real app, get from auth
+      };
+
+      // Call the triage-request function
+      const { data: triageResult, error } = await supabase.functions.invoke('triage-request', {
+        body: payload
       });
-      return newMessages;
-    });
+
+      if (error) throw error;
+
+      // Replace the form with a confirmation message
+      setMessages(prev => {
+        const newMessages = [...prev];
+        // Remove the form component (last message) and add confirmation
+        newMessages.pop();
+        newMessages.push({
+          from: "bot",
+          text: `Thank you! Your maintenance request has been submitted and triaged.
+          
+📝 **Request Details:**
+- Priority: ${triageResult?.priority || data.priority}
+- Specialty: ${triageResult?.specialty || 'General'}
+- Status: ${triageResult?.status || 'Submitted'}
+
+${data.permissionGranted ? "✅ We have permission to enter your unit." : "⚠️ Please note: We'll need to schedule access to your unit."}
+
+${triageResult?.status === 'Scheduled' ? "🚀 Your request has been automatically scheduled with a vendor!" : "You should receive an update within 24 hours."}`
+        });
+        return newMessages;
+      });
+
+      setConversationMode('idle');
+    } catch (error) {
+      console.error("Error submitting maintenance request:", error);
+      setMessages(prev => [...prev, { 
+        from: "bot", 
+        text: "Sorry, there was an error submitting your request. Please try again or contact our office directly." 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
 
@@ -201,166 +237,6 @@ const Chat = () => {
     }
   };
 
-  // Handle file selection
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    const uploadedUrl = await uploadFile(file);
-    
-    if (uploadedUrl) {
-      setMessages(prev => [
-        ...prev,
-        { 
-          from: "user", 
-          text: `Uploaded: ${file.name}`,
-          imageUrl: uploadedUrl 
-        }
-      ]);
-      
-      // Add to maintenance conversation
-      if (maintenanceConversation) {
-        setMaintenanceConversation(prev => prev ? {
-          ...prev,
-          uploadedFiles: [...prev.uploadedFiles, uploadedUrl]
-        } : null);
-      }
-    } else {
-      setMessages(prev => [...prev, { 
-        from: "bot", 
-        text: "Sorry, there was an error uploading your file. Please try again." 
-      }]);
-    }
-    
-    setIsLoading(false);
-    setShowFileUpload(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // Initiate maintenance request flow
-  const initiateMaintenanceRequest = async () => {
-    setConversationState("maintenance_request");
-    setMaintenanceConversation({
-      initialDescription: "",
-      uploadedFiles: [],
-      conversationHistory: []
-    });
-    setShowFileUpload(true);
-    
-    setMessages(prev => [...prev, { 
-      from: "bot", 
-      text: "I'll help you submit a maintenance request. Please describe the issue you're experiencing. You can also upload a photo or video to help us understand the problem better." 
-    }]);
-  };
-
-  // Handle initial maintenance description
-  const handleMaintenanceDescription = async (description: string) => {
-    if (!maintenanceConversation) return;
-
-    // Update maintenance conversation
-    const updatedConversation = {
-      ...maintenanceConversation,
-      initialDescription: description,
-      conversationHistory: [
-        ...maintenanceConversation.conversationHistory,
-        { role: "user" as const, content: description }
-      ]
-    };
-    
-    setMaintenanceConversation(updatedConversation);
-    setIsLoading(true);
-
-    try {
-      // Call LLM for follow-up question
-      const { data, error } = await supabase.functions.invoke('maintenance-assistant', {
-        body: {
-          description,
-          conversationHistory: updatedConversation.conversationHistory
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.followUpQuestion) {
-        updatedConversation.followUpQuestion = data.followUpQuestion;
-        updatedConversation.conversationHistory.push({
-          role: "assistant",
-          content: data.followUpQuestion
-        });
-        
-        setMaintenanceConversation(updatedConversation);
-        setConversationState("maintenance_followup");
-        setMessages(prev => [...prev, { 
-          from: "bot", 
-          text: data.followUpQuestion 
-        }]);
-      } else {
-        // No follow-up needed, complete the request
-        await completeMaintenanceRequest(updatedConversation);
-      }
-    } catch (error) {
-      console.error('Error getting LLM response:', error);
-      setMessages(prev => [...prev, { 
-        from: "bot", 
-        text: "Thank you for the description. I'll submit your maintenance request now." 
-      }]);
-      await completeMaintenanceRequest(updatedConversation);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle follow-up response
-  const handleMaintenanceFollowUp = async (answer: string) => {
-    if (!maintenanceConversation) return;
-
-    const updatedConversation = {
-      ...maintenanceConversation,
-      followUpAnswer: answer,
-      conversationHistory: [
-        ...maintenanceConversation.conversationHistory,
-        { role: "user" as const, content: answer }
-      ]
-    };
-    
-    setMaintenanceConversation(updatedConversation);
-    await completeMaintenanceRequest(updatedConversation);
-  };
-
-  // Complete maintenance request
-  const completeMaintenanceRequest = async (conversation: MaintenanceConversation) => {
-    setIsLoading(true);
-    
-    try {
-      // TODO: Submit to database - for now just show confirmation
-      setMessages(prev => [...prev, { 
-        from: "bot", 
-        text: `Perfect! I've submitted your maintenance request. Here's a summary:
-
-📝 Issue: ${conversation.initialDescription}
-${conversation.followUpAnswer ? `📋 Additional info: ${conversation.followUpAnswer}` : ''}
-${conversation.uploadedFiles.length > 0 ? `📸 Files uploaded: ${conversation.uploadedFiles.length}` : ''}
-
-You should receive an update within 24 hours. Your request has been prioritized based on the information provided.` 
-      }]);
-      
-      // Reset state
-      setConversationState("idle");
-      setMaintenanceConversation(null);
-      setShowFileUpload(false);
-    } catch (error) {
-      console.error('Error completing maintenance request:', error);
-      setMessages(prev => [...prev, { 
-        from: "bot", 
-        text: "There was an error submitting your request. Please try again or contact our office directly." 
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
 
   return (
@@ -446,28 +322,10 @@ You should receive an update within 24 hours. Your request has been prioritized 
                 className="flex-1 p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Type your message..."
             />
-            {showFileUpload && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="bg-gray-500 text-white px-3 hover:bg-gray-600 transition-colors"
-                title="Upload file"
-              >
-                <Upload size={20} />
-              </button>
-            )}
             <button onClick={() => handleSend()} className="bg-blue-500 text-white px-4 rounded-r-lg">
                 Send
             </button>
         </div>
-        
-        {/* Hidden file input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
       </div>
     </div>
   );
